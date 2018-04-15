@@ -4,7 +4,7 @@
 //
 //  Created by apple on 16/2/24.
 //  Copyright © 2016年 wjc. All rights reserved.
-//  红黑树 Tire树 搜索二叉树 最大堆 最小堆 归并 二分查找 hash 哈夫曼 LWZ算法 动态规划 贪心 回溯法
+//  红黑树 Tire树 B树 B+树 搜索二叉树 最大堆 最小堆 归并 二分查找 快排 hash表 哈夫曼 LWZ算法 动态规划 贪心 回溯法
 
 #include <iostream>
 #include <stdio.h>
@@ -16,10 +16,97 @@
 #include <stack>
 #include <queue>
 #include <vector>
+#include <set>
 #include "TemplateDemo.hpp"
 #include <exception>
+#include <pthread.h>
+
+typedef struct {
+    pthread_mutex_t mutex; // Mutex to protect access to the structure
+    char *name;
+    void **ptr;
+    size_t bufsize;
+    int freetotal;
+    int freecurr;
+    
+}cache_t;
 
 using namespace std;
+
+#ifndef NDEBUG
+const uint64_t redzone_pattern = 0xdeadbeefcafebabe;
+int cache_error = 0;
+#endif
+
+const int initial_pool_size = 64;
+
+cache_t* cache_create(const char *name, size_t bufsize, size_t align) {
+    cache_t *ret = (cache_t *)calloc(1, sizeof(cache_t));
+    char* nm = strdup(name);
+    void **ptr = (void **)calloc(initial_pool_size, sizeof(void *));
+    if (ret == NULL || nm == NULL || ptr == NULL || pthread_mutex_init(&ret->mutex, NULL) == -1) {
+        free(ret);
+        free(nm);
+        free(ptr);
+        return NULL;
+    }
+    
+    ret->name = nm;
+    ret->ptr = ptr;
+    ret->freetotal = initial_pool_size;
+#ifndef NDEBUG
+    ret->bufsize = bufsize + 2 * sizeof(redzone_pattern);
+#else
+    ret->bufsize = bufsize;
+#endif
+    
+    return ret;
+}
+
+class Solution
+{
+public:
+    // ip字符串输入默认采用IPV4的点分十进制法，合法地址为0.0.0.0-255.255.255.255
+    bool isLegalIP(const string& ip)
+    {
+        int validSegSize = 0; // 记录一共有多少个分段
+        
+        int oneSeg = 0; // 记录每个分段的数值
+        int segLen = 0; // 记录是否分段有数值
+        for (int i = 0; i < ip.length(); ++i)
+        {
+            // 计算每个分段的数值
+            if (ip[i] >= '0' && ip[i] <= '9')
+            {
+                oneSeg = oneSeg * 10 + (ip[i] - '0');
+                // 如果分段有数值，就置segLen为1
+                ++segLen;
+            }
+            else if (ip[i] == '.') // 如果此字符为'.'，那么就判断之前的那个分段的值是否合法且是否存在值
+            {
+                if (oneSeg <= 255 && segLen > 0)
+                    validSegSize++;
+                else
+                    return false;
+                
+                oneSeg = 0; // 重置分段值
+                segLen = 0; // 重置分段是否存在值
+            }
+            else // 如果出现0-9或'.'以外的字符都判断为非法
+                return false;
+        }
+        
+        // 判断最后一个分段的合法性
+        if (oneSeg <= 255 && segLen > 0)
+            validSegSize++;
+        
+        // 判断是否一共有四个分段
+        if (validSegSize == 4)
+            return true;
+        else
+            return false;
+    }
+};
 
 bool findMatrix(int *martix, int rows, int columns, int number);
 // 二维数组中的查找
@@ -550,6 +637,43 @@ void PrintList(BinaryTreeNode *pRoot)
         pNode = pNode->m_pRight;
     }
     printf("\nPrintList ends.\n");
+}
+
+// 二叉搜索树的后序遍历序列 Binary Search Tree
+bool VerifySequenceOfBST(int sequence[], int length)
+{
+    if (sequence == NULL || length <= 0) {
+        return false;
+    }
+    
+    int root = sequence[length - 1];
+    
+    // 在二叉搜索树中左子树的结点小于根节点
+    int i = 0;
+    for (; i < length - 1; ++i) {
+        if (sequence[i] > root) {
+            break;
+        }
+    }
+    // 在二叉搜索树中右子树的结点大于根结点
+    int j = i;
+    for (; j < length - 1; ++j) {
+        if (sequence[j] < root) {
+            return false;
+        }
+    }
+    // 判断左子树是不是二叉搜索树
+    bool left = true;
+    if (i > 0) {
+        left = VerifySequenceOfBST(sequence, i);
+    }
+    // 判断右子树是不是二叉搜索树
+    bool right = true;
+    if (i < length - 1) {
+        right = VerifySequenceOfBST(sequence + i, length - i - 1);
+    }
+    
+    return (left && right);
 }
 
 template <typename AnyType>
@@ -1130,7 +1254,8 @@ void FindPath(BinaryTreeNode *pRoot, int expectedSum, std::vector<int>& path, in
     bool isLeaf = pRoot->m_pLeft == NULL && pRoot->m_pRight == NULL;
     if (currentSum == expectedSum && isLeaf) {
         printf("A path is found: ");
-        std::vector<int>::iterator iter = path.begin();
+//        std::vector<int>::iterator iter = path.begin();
+        auto iter = path.begin(); // 等同于上面
         for (; iter != path.end(); ++iter) {
             printf("%d\t", *iter);
         }
@@ -1152,7 +1277,7 @@ void FindPath(BinaryTreeNode *pRoot, int expectedSum, std::vector<int>& path, in
 
 void FindPath(BinaryTreeNode *pRoot, int expectedSum)
 {
-    if (pRoot == NULL) {
+    if (pRoot == NULL || expectedSum <= 0) {
         return;
     }
     std::vector<int>path;
@@ -1221,6 +1346,113 @@ ComplexListNode *Clone(ComplexListNode *pHead)
     return ReconnectNodes(pHead);
 }
 
+bool g_bInputInvalid = false;
+bool CheckInvalidArray(int *numbers, int length)
+{
+    g_InvalidInput = false;
+    if (numbers == NULL && length <= 0) {
+        g_InvalidInput = true;
+    }
+    return g_InvalidInput;
+}
+
+bool CheckMoreThanHalf(int *numbers, int length, int number)
+{
+    int times = 0;
+    for (int i = 0; i < length; i++) {
+        if (numbers[i] == number) {
+            times++;
+        }
+    }
+    
+    bool isMoreThanHalf = true;
+    if (times * 2 <= length) {
+        g_InvalidInput = true;
+        isMoreThanHalf = false;
+    }
+    
+    return isMoreThanHalf;
+}
+
+int MoreThanHalfNum(int *numbers, int length)
+{
+    if (CheckInvalidArray(numbers, length)) {
+        return 0;
+    }
+    
+    int middle = length >> 1;
+    int start = 0;
+    int end = length - 1;
+    int index = Partition(numbers, length, start, end);
+    while (index != middle) {
+        if (index > middle) {
+            end = index - 1;
+            index = Partition(numbers, length, start, end);
+        }
+        else {
+            start = index + 1;
+            index = Partition(numbers, length, start, end);
+        }
+    }
+    
+    int result = numbers[middle];
+    if (!CheckMoreThanHalf(numbers, length, result)) {
+        result = 0;
+    }
+    return result;
+}
+
+typedef multiset<int, greater<int> > intSet;
+typedef multiset<int, greater<int> >::iterator setIterator;
+void GetLeastNumbers(const vector<int>& data, intSet& leastNumbers, int k)
+{
+    leastNumbers.clear();
+    if (k < 1 || data.size() < k) {
+        return;
+    }
+    
+    vector<int>::const_iterator iter = data.begin();
+    for (; iter != data.end(); ++iter) {
+        if ((leastNumbers.size()) < k) {
+            leastNumbers.insert(*iter);
+        }
+        else {
+            setIterator iterGreatest = leastNumbers.begin();
+            if (*iter < *(leastNumbers.begin())) {
+                leastNumbers.erase(iterGreatest);
+                leastNumbers.insert(*iter);
+            }
+        }
+    }
+}
+
+int FindGreatestSumOfSubArray(int *pData, int nLength)
+{
+    if (pData == NULL || (nLength <= 0)) {
+        g_InvalidInput = true;
+        return 0;
+    }
+    g_InvalidInput = false;
+    
+    int nCurSum = 0;
+    int nGreatestSum = 0x80000000;
+    for (int i = 0; i < nLength; ++i) {
+        if (nCurSum <= 0) {
+            nCurSum = pData[i];
+        }
+        else {
+            nCurSum += pData[i];
+        }
+        if (nCurSum > nGreatestSum) {
+            nGreatestSum = nCurSum;
+        }
+    }
+    return nGreatestSum;
+}
+
+// 动态规划
+
+
 void reverse_c(char arr[], int start, int end)
 {
     int mid = (start + end) / 2;
@@ -1238,7 +1470,32 @@ void useReverse_c(char arr[], int len, int m)
     reverse_c(arr, 0, len);
 }
 
+class AA
+{
+private:
+    int n1;
+    int n2;
+public:
+    AA():n2(0), n1(n2 + 2)
+    {
+        
+    }
+    
+    void Print()
+    {
+        std::cout << "n1: " << n1 << ", n2: " << n2 << std::endl;
+    }
+};
+
 int main(int argc, const char * argv[]) {
+    
+    AA a22;
+    a22.Print();
+    
+    Solution solution;
+    cout<<solution.isLegalIP("129.45.354.34")<<endl;
+    cout<<solution.isLegalIP("129.45.54.34")<<endl;
+    cout<<solution.isLegalIP("329.45.54.34")<<endl;
     
 //    int *ptr = const_cast<int *>(fun(2,3));
     
